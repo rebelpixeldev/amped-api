@@ -9,17 +9,21 @@ const
 	passportJWT = require('passport-jwt'),
 	request = require('request'),
 	SHA1 = require('sha1'),
-	User = require('../models/Users'),
-	util = require('./AmpedUtil');
+	User = require('../models/Users');
 
 module.exports = function(config) {
 
 	const
 		AmpedAuthorization = require('./AmpedAuthorization')(config),
 		AmpedConnector = require('./AmpedConnector')(config),
-		AmpedFeedback = require('./AmpedFeedback')(config);
+		AmpedFeedback = require('./AmpedFeedback')(config),
+		util = require('./AmpedUtil')(config);
 
 	class AmpedPassport {
+
+		static getPassport(){
+			return passport;
+		}
 
 		constructor(app, socket) {
 			this.app = app;

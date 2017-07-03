@@ -10,6 +10,7 @@ module.exports = function(config) {
 		constructor(io) {
 			this.io = io;
 			this.sockets = {};
+			this.allConnectedUserSockets = {};
 			this.setup();
 		}
 
@@ -30,8 +31,12 @@ module.exports = function(config) {
 							this.sockets[user.account_id] = {};
 						socket.user = user;
 						this.sockets[user.account_id][user.id] = socket;
+						this.allConnectedUserSockets[user.id] = socket;
 
-						socket.on('disconnect', () => delete this.sockets[user.account_id][user.id]);
+						socket.on('disconnect', () => {
+							delete this.sockets[user.account_id][user.id];
+							delete this.allConnectedUserSockets[user.id];
+						});
 					});
 			})
 		}
@@ -40,21 +45,26 @@ module.exports = function(config) {
 		 * @param {string} evt   - The event that should be sent
 		 * @param {any} data     - The data that will be sent with the socket event
 		 * @param {object} req   - Express request object
+		 * @param {function} customEmitCallback - A callback to override the default socket functionality
 		 */
-		sendSocket(evt, data, user, toUser) {
+		sendSocket(evt, data, user, customEmitCallback) {
 
-			console.log('* * * * * * * Sending socket', evt);
 
 			if (typeof data === 'undefined')
 				data = {};
 
-			if (typeof toUser === 'undefined') {
+			if ( typeof customEmitCallback === 'function') {
+				customEmitCallback(this.allConnectedUserSockets, evt, data, user);
+			} else {
+				// if (typeof toUser === 'undefined') {
 				if (typeof this.sockets[user.account_id] !== 'undefined')
 					Object.keys(this.sockets[user.account_id]).forEach((sk) => {
 						this.sockets[user.account_id][sk].emit(evt, data)
 					});
-			} else
-				this.sockets[toUser.account_id][toUser.id].emit(evt, data);
+			}
+
+			// } else
+			// 	this.sockets[toUser.account_id][toUser.id].emit(evt, data);
 			// this.sockets.forEach((socket) => {
 			//   socket.emit(evt, data)
 			// });

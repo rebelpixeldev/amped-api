@@ -15,7 +15,7 @@ class Users extends AmpedModel {
 	addRelations(models) {
 		this.models = models; // @TODO: Not sure I like this so much
 		models.users.getModel().belongsTo(models.accounts.getModel(), {foreignKey: 'account_id'});
-		models.users.getModel().belongsTo(models.uploads.getModel());
+		models.users.getModel().belongsTo(models.uploads.getModel(), { foreignKey: 'upload_id'});
 		models.users.getModel().hasMany(models.activity.getModel());
 		models.users.getModel().belongsToMany(models.groups.getModel(), {through:models.user_groups.getModel()});
 	}
@@ -101,6 +101,7 @@ class Users extends AmpedModel {
 				attributes: {include: 'created_at', exclude: Object.keys(this.defaultSchema)}
 			},
 			{
+				as : 'upload',
 				model: this.models.uploads.getModel(),
 				attributes: ['id', 'filename', 'extension', 'title', 'created_at']
 			},

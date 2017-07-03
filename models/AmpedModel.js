@@ -84,6 +84,7 @@ module.exports = function(c) {
 
 				this.app.get(`${this.route}/:_id`, [AmpedAcl.can.bind(this, 'view', this.modelName)], this.getModelDataRoute.bind(this));
 				this.app.post(`${this.route}/:_id`, [AmpedAcl.can.bind(this, 'update', this.modelName)], this.updateModelData.bind(this));
+				this.app.post(`${this.route}`, [AmpedAcl.can.bind(this, 'create', this.modelName)], this.updateModelData.bind(this));
 				this.app.delete(`${this.route}/:_id`, [AmpedAcl.can.bind(this, 'delete', this.modelName)], this.deleteModelData.bind(this));
 
 			}
@@ -138,7 +139,7 @@ module.exports = function(c) {
 				params = util.getParams(req);
 
 			return this.getQuery(req, res, params)
-				.then(data => this.sendResponse(req, res, data, message))
+				.then(data => this.sendResponse(req, res, this.modifyGetData(data), message))
 				.catch((err) => {
 					console.log('ERROR', err);
 				});
@@ -228,6 +229,10 @@ module.exports = function(c) {
 				data = util.dotNotationToObject(params),
 				isCreation = typeof data.id === 'undefined' || data.id === null || data.id === 0;
 
+			
+			if ( isCreation && typeof this.schema.amp_user_id !== 'undefined' )
+				params.amp_user_id = req.user.id;
+
 			( isCreation ?
 				this.DB.build(params).save() :
 				this.DB.findById(data.id))
@@ -259,12 +264,15 @@ module.exports = function(c) {
 						.then((modelData) => {
 
 							this.getModelData(req, res, {_id: result.id}, isCreation ? this.successMessage : this.updateMessage)
+								// @TODO user below is actually the full data that you would get through a get request
+								// Added fullData so the rest of the stuff still works but should really figure out where the
+								// fuck user and data values are being used
 								.then((user) => {
 									if (isCreation) {
-										this.sendSocket('CREATE', {user, data: modelData}, req.user);
+										this.sendSocket('CREATE', {user, data: modelData, fullData : user}, req.user);
 										this.logActivity(req, 'create', `${this.modelName} was created`, user);
 									} else {
-										this.sendSocket('UPDATE', {user, data: modelData}, req.user);
+										this.sendSocket('UPDATE', {user, data: modelData, fullData : user}, req.user);
 										this.logActivity(req, 'update', `${this.modelName} was updated`, user);
 									}
 								});
@@ -457,8 +465,12 @@ module.exports = function(c) {
 		 * @param {any} data    - The data that should be sent with the socket
 		 */
 		sendSocket(evt, data, user) {
-			this.socket.sendSocket(this.getEvent(evt), data, user);
+			this.socket.sendSocket(this.getEvent(evt), data, user, this.customSocketEmit);
 		}
+		//
+		// customSocketEmit(sockets, evt, data, user){
+		// 	// do nothing by default, used for child models
+		// }
 
 		/**
 		 * Logs an activity using the AmpedActivityLog
@@ -478,6 +490,11 @@ module.exports = function(c) {
 		 */
 		getModel() {
 			return this.DB;
+		}
+
+
+		modifyGetData(data){
+			return data;
 		}
 
 		/**
@@ -616,6 +633,8 @@ module.exports = function(c) {
 		get updateMessage() {
 			return ` ${util.capitalize(this.modelName)} has been updated`;
 		}
+
+
 
 		/**
 		 * The default columns that should be on every model
