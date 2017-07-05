@@ -139,7 +139,7 @@ module.exports = function(c) {
 				params = util.getParams(req);
 
 			return this.getQuery(req, res, params)
-				.then(data => this.sendResponse(req, res, this.modifyGetData(data), message))
+				.then(data => this.sendResponse(req, res, this.modifyGetData(req, data), message))
 				.catch((err) => {
 					console.log('ERROR', err);
 				});
@@ -493,7 +493,7 @@ module.exports = function(c) {
 		}
 
 
-		modifyGetData(data){
+		modifyGetData(req, data){
 			return data;
 		}
 
