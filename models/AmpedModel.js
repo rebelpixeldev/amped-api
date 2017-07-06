@@ -139,7 +139,8 @@ module.exports = function(c) {
 				params = util.getParams(req);
 
 			return this.getQuery(req, res, params)
-				.then(data => this.sendResponse(req, res, this.modifyGetData(req, data), message))
+			// @TODO JSON.parse(JSON.stringify(data)) removes all the sequelize object shit on the variable, see if there is a better way to do this
+				.then(data => this.sendResponse(req, res, this.modifyGetData(req, JSON.parse(JSON.stringify(data))), message))
 				.catch((err) => {
 					console.log('ERROR', err);
 				});
@@ -195,14 +196,14 @@ module.exports = function(c) {
 				})
 
 			} else if (typeof params._id === 'undefined') {
-				return this.DB.findAll(this.buildQuery({}, params));
+				return this.DB.findAll(this.buildQuery({}, params, req));
 			} else {
 				const where = {};
 				where[this.getIdColumn] = params._id;
 
 				delete params._id;
 
-				return this.DB.findOne(this.buildQuery({where}, params))
+				return this.DB.findOne(this.buildQuery({where}, params, req))
 			}
 		}
 
@@ -373,7 +374,7 @@ module.exports = function(c) {
 		 * @param {object} params - The params for the current request
 		 * @returns {object}
 		 */
-		buildQuery(baseQuery, params) {
+		buildQuery(baseQuery, params, req) {
 
 			const query = Object.assign({}, baseQuery);
 
@@ -388,6 +389,11 @@ module.exports = function(c) {
 			//@TODO add json querying
 			query.attributes = {exclude: ['deleted_at', 'deleted_by']};
 			query.where = Object.assign({}, this.paramsToQuery(params), (query.where || {}));
+
+			if ( this.getByUser && typeof query.where.amp_user_id === 'undefined' && typeof req.user !== 'undefined' )
+				query.where.amp_user_id = req.user.id;
+
+			console.log(query);
 
 			if (typeof params.in !== 'undefined') {
 				delete query.where.in;
@@ -604,6 +610,14 @@ module.exports = function(c) {
 
 		get defineOptions() {
 			return {};
+		}
+
+		/**
+		 * Property for get requests to only get results based on user id from req.user
+		 * @returns {boolean}
+		 */
+		get getByUser(){
+			return false;
 		}
 
 		get headerFields() {
