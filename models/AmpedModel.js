@@ -170,7 +170,12 @@ module.exports = function(c) {
 						return row.map((col) => {
 							if (typeof data === 'undefined' && col.name === 'id')
 								return col;
-							col.value = col.name === 'id' ? data[col.name] : data[this.schemaData[col.name].value_field] || data[col.name] || this.schema[col.name].defaultValue || '';
+
+							console.log(col);
+
+							// { type: 'text', label: 'title', name: 'title' }
+							if ( typeof data !== 'undefined' )
+								col.value = col.name === 'id' ? data[col.name] : data[this.schemaData[col.name].value_field] || data[col.name] || this.schema[col.name].defaultValue || '';
 							return col;
 						});
 					}) : data
@@ -271,10 +276,10 @@ module.exports = function(c) {
 								.then((user) => {
 									if (isCreation) {
 										this.sendSocket('CREATE', {user, data: modelData, fullData : user}, req.user);
-										this.logActivity(req, 'create', `${this.modelName} was created`, user);
+										this.logActivity(req, 'create', this.getCreateMessage(user), user);
 									} else {
 										this.sendSocket('UPDATE', {user, data: modelData, fullData : user}, req.user);
-										this.logActivity(req, 'update', `${this.modelName} was updated`, user);
+										this.logActivity(req, 'update', this.getUpdateMessage(user), user);
 									}
 								});
 						});
@@ -379,8 +384,7 @@ module.exports = function(c) {
 			const query = Object.assign({}, baseQuery);
 
 			if (typeof query.include === 'undefined')
-				query.include = this.queryIncludes;
-
+				query.include = this.getQueryIncludes(req.user, params);
 
 			const {order_by = this.queryOrderBy, order = this.queryOrder} = params;
 			query.order = `${order_by} ${order}`;//typeof params.order === 'undefined' ? `${order_by} ${order}` : params.order;
@@ -498,6 +502,14 @@ module.exports = function(c) {
 			return this.DB;
 		}
 
+		getCreateMessage(data){
+			return `${this.modelName} was created`;
+		}
+
+		getUpdateMessage(data){
+			return `${this.modelName} was updated`
+		}
+
 
 		modifyGetData(req, data){
 			return data;
@@ -507,7 +519,7 @@ module.exports = function(c) {
 		 * Get the includes for use in the get query and used with the Sequelize egar loading
 		 * @returns {Array}
 		 */
-		get queryIncludes() {
+		getQueryIncludes(user, params) {
 			return [];
 		}
 

@@ -143,7 +143,7 @@ module.exports = function(c) {
 					else
 						req.dbRef.users.getModel().findOne({
 							where: {id: parseInt(req.payload.id)},
-							include: req.dbRef.users.queryIncludes
+							include: req.dbRef.users.getQueryIncludes()
 						})
 							.then(resolve)
 							.catch(reject);

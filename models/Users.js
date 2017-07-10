@@ -94,7 +94,7 @@ class Users extends AmpedModel {
 		}
 	}
 
-	get queryIncludes() {
+	getQueryIncludes(user, params) {
 		return [
 			{
 				model: this.models.accounts.getModel(),

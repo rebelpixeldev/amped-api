@@ -29,7 +29,7 @@ class UserGroups extends AmpedModel {
 		return false;
 	}
 
-	get queryIncludes() {
+	getQueryIncludes(user, params) {
 		return [
 			{
 				model: this.models.groups.getModel(),

@@ -57,7 +57,7 @@ module.exports = function(c) {
 		}
 
 		static can(permission, resource, req, res, next) {
-
+console.log(req.user);
 			acl.isAllowed(req.user.user_groups[0], resource, permission, function (err, allowed) {
 				if (allowed) {
 					next();
