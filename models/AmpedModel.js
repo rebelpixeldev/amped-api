@@ -269,7 +269,7 @@ module.exports = function(c) {
 					result.updateAttributes(attrs)
 						.then((modelData) => {
 
-							this.getModelData(req, res, {_id: result.id}, isCreation ? this.successMessage : this.updateMessage)
+							this.getModelData(req, res, {_id: result.id}, isCreation ?  this.getCreateMessage(modelData) : this.getUpdateMessage(modelData))
 								// @TODO user below is actually the full data that you would get through a get request
 								// Added fullData so the rest of the stuff still works but should really figure out where the
 								// fuck user and data values are being used
@@ -396,8 +396,6 @@ module.exports = function(c) {
 
 			if ( this.getByUser && typeof query.where.amp_user_id === 'undefined' && typeof req.user !== 'undefined' )
 				query.where.amp_user_id = req.user.id;
-
-			console.log(query);
 
 			if (typeof params.in !== 'undefined') {
 				delete query.where.in;
