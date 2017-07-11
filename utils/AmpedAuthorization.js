@@ -108,7 +108,7 @@ module.exports = function(c) {
 			} else {
 				AmpedAuthorization.getUserByPayload(req)
 					.then((user) => {
-						req.user = user.get({plain: true});
+						req.user = user === null ? null : user.get({plain: true});
 						next();
 					}).catch((err) => {
 					next({
