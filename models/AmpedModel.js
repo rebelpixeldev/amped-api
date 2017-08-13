@@ -3,11 +3,25 @@
 //@TODO create two way binding for database entries
 
 const
-	AmpedConnector = require('../utils/AmpedConnector')(),
-	AmpedAcl = require('../utils/AmpedAcl')(),
-	sequelize = require('sequelize'),
-	url = require('url'),
-	util = require('../utils/AmpedUtil')();
+	AmpedConnector  = require('../utils/AmpedConnector')(),
+	AmpedAcl        = require('../utils/AmpedAcl')(),
+	fs              = require('fs'),
+	multer          = require('multer'),
+	os              = require('os'),
+	path            = require('path'),
+	sequelize       = require('sequelize'),
+	url             = require('url'),
+	util            = require('../utils/AmpedUtil')();
+
+const storage =   multer.diskStorage({
+	destination: function (req, file, callback) {
+		callback(null, path.join(__dirname, '../uploads/tmp'));
+	},
+	filename: function (req, file, callback) {
+		callback(null, util.getTempName(file.originalname));
+	}
+});
+const fileUpload =  multer({ storage : storage }).array('import-csv', 200);
 
 /**
  * Maps a sequelize type to client side type for use in building the crud forms and data tables
@@ -64,28 +78,27 @@ module.exports = function(c) {
 
 				this.app.get(this.route, this.getModelDataRoute.bind(this));
 
-				this.app.get(this.route + '/account', [AmpedAcl.can.bind(this, 'view-account', this.modelName)], (req, res) => {
+				this.app.get(`${this.route}/account`, [AmpedAcl.can.bind(this, 'view-account', this.modelName)], (req, res) => {
 					const params = util.getParams(req);
 					params.account_id = req.user.account_id;
 					this.getModelData(req, res, params);
-				});//this.getModelDataRoute.bind(this));
+				});
 
-				// this.app.route(this.route, acl.can('view', this.model))
-				//   .get(this.getModelData.bind(this))
-				//   .post(this.createModelData.bind(this));
+				// Meta routes
 				this.app.get(`${this.route}/tableHeaders`, [AmpedAcl.can.bind(this, 'view-tableheaders', this.modelName)], this.getTableHeaders.bind(this));
+				this.app.get(`${this.route}/import-template`, [AmpedAcl.can.bind(this, 'view-import-template', this.modelName)], this.getImportTemplate.bind(this));
+				this.app.post(`${this.route}/import`, [AmpedAcl.can.bind(this, 'import', this.modelName)], this.importData.bind(this));
+
+				// Edit routes
 				this.app.get(`${this.route}/edit`, [AmpedAcl.can.bind(this, 'view-form', this.modelName)], this.getModelDataRoute.bind(this));
 				this.app.get(`${this.route}/edit/:_id`, [AmpedAcl.can.bind(this, 'view-form', this.modelName)], this.getModelDataRoute.bind(this))
 
-				// this.app.post(this.route + '/:_id', this.updateModelData.bind(this));
-
-				// this.app.route(this.route)
-				// 	.post(this.updateModelData.bind(this));
-
+				//Crud routes
 				this.app.get(`${this.route}/:_id`, [AmpedAcl.can.bind(this, 'view', this.modelName)], this.getModelDataRoute.bind(this));
 				this.app.post(`${this.route}/:_id`, [AmpedAcl.can.bind(this, 'update', this.modelName)], this.updateModelData.bind(this));
 				this.app.post(`${this.route}`, [AmpedAcl.can.bind(this, 'create', this.modelName)], this.updateModelData.bind(this));
 				this.app.delete(`${this.route}/:_id`, [AmpedAcl.can.bind(this, 'delete', this.modelName)], this.deleteModelData.bind(this));
+
 
 			}
 		}
@@ -368,6 +381,12 @@ module.exports = function(c) {
 			return fields;
 		}
 
+		/**
+		 * Sends the headers for displaying the current model in a table
+		 *
+		 * @param {object} req - Express request object
+		 * @param {object} res  - Express response object
+		 */
 		getTableHeaders(req, res) {
 			res.feedback(this.headerFields);
 		}
@@ -492,6 +511,86 @@ module.exports = function(c) {
 			req.logActivity(action, description, data);
 		}
 
+
+
+		getImportTemplate(req, res){
+			res.feedback({
+				data : this.importTemplate,
+				csv : Object.keys(this.importTemplate).join(',') + '\n'
+			});
+		}
+
+
+		importData(req, res){
+			fileUpload(req,res,(err) => {
+				if(err) return res.feedback({success:false, message:err});
+				if ( req.files.length === 0 ) return res.feedback({success:false, message:'No file uploaded'});
+
+				const
+					fileStream = fs.createReadStream(req.files[0].path),
+					columns = Object.keys(this.importTemplate),
+					bulkSize = 100,
+					templateHeaders = Object.keys(this.importTemplate).join(',');
+				let initial = true,
+					total = 0;
+
+				this.sendSocket(`${this.modelName.toUpperCase()}_IMPORT_START`, {total:total.length}, req.user)
+
+				fileStream
+					.on('data', ( part ) => {
+						let data = part.toString('utf8').split(os.EOL);
+
+						if ( initial ){
+							const headers = data.shift().replace(/(?:\r\n|\r|\n)/g, '');
+
+							if ( templateHeaders !== headers ) {
+								fileStream.destroy();
+								res.feedback({success:false, message:'The headers in the imported file do not match the template. Please format your file with using the template provided.'})
+							}
+							initial = false;
+						}
+
+						while(data.length > 0 ){
+							const dataPart = data.splice(0,bulkSize)
+								.filter(( row ) => row.trim() !== '' )
+								.map(( row ) => {
+								    const rowArr = row.replace(/(?:\r\n|\r|\n)/g, '').split(',');
+								    return columns.reduce(( ret, col, i ) => {
+								        ret[this.importTemplate[col]] = rowArr[i];
+								        return ret;
+								    }, {})
+								});
+
+							this.DB.bulkCreate(dataPart)
+								.then((  ) => {
+									total += bulkSize
+								    this.sendSocket(`${this.modelName.toUpperCase()}_IMPORT_PROGRESS`, {progress:bulkSize, totalAdded:total}, req.user)
+								})
+								.catch(( err ) => {
+
+									console.log('BULK ERROR ', err);
+									fileStream.destroy();
+									data = [];
+									res.feedback({success:false, message:err})
+								});
+						}
+					})
+					.on('end', (  ) => {
+						console.log('END');
+						this.sendSocket(`${this.modelName.toUpperCase()}_IMPORT_COMPLETE`, {total:total.length}, req.user)
+					    res.feedback({message:'Import complete'});
+					})
+					.on('error', ( err ) => {
+						console.log('ERROR');
+					    res.feedback(err);
+					})
+					.on('close', ( err ) => {
+					    console.log('ABORTED!', err);
+					})
+
+			});
+		}
+
 		/**
 		 * Return the Sequelize model for the current class
 		 * @returns {Model|*}
@@ -561,6 +660,14 @@ module.exports = function(c) {
 
 		get connection() {
 			return connection;
+		}
+
+		/**
+		 * Specifices if you are able to import data for the model
+		 * @returns {boolean}
+		 */
+		get canImport(){
+			return true;
 		}
 
 		/**
@@ -658,7 +765,9 @@ module.exports = function(c) {
 			return ` ${util.capitalize(this.modelName)} has been updated`;
 		}
 
-
+		get importTemplate(){
+			return this.schema;
+		}
 
 		/**
 		 * The default columns that should be on every model
@@ -680,19 +789,19 @@ module.exports = function(c) {
 		}
 
 		get supermanAclPermissions() {
-			return ['view', 'update', 'create', 'delete', 'view-account', 'view-form', 'view-tableheaders'];
+			return ['view', 'update', 'create', 'delete', 'view-account', 'view-form', 'view-tableheaders', 'view-import-template', 'import'];
 		}
 
 		get adminAclPermissions() {
-			return ['view', 'update', 'create', 'delete', 'view-account', 'view-form', 'view-tableheaders'];
+			return ['view', 'update', 'create', 'delete', 'view-account', 'view-form', 'view-tableheaders', 'view-import-template', 'import'];
 		}
 
 		get managerAclPermissions() {
-			return ['view', 'update', 'create', 'delete', 'view-account', 'view-form', 'view-tableheaders'];
+			return ['view', 'update', 'create', 'delete', 'view-account', 'view-form', 'view-tableheaders', 'view-import-template', 'import'];
 		}
 
 		get userAclPermissions() {
-			return ['view', 'update', 'create', 'delete', 'view-account', 'view-form', 'view-tableheaders'];
+			return ['view', 'update', 'create', 'delete', 'view-account', 'view-form', 'view-tableheaders', 'view-import-template', 'import'];
 		}
 	}
 	return AmpedModel;

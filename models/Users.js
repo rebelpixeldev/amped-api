@@ -39,6 +39,15 @@ class Users extends AmpedModel {
 		}
 	}
 
+	get importTemplate(){
+		return {
+			'Display Name' : 'display_name',
+			'First Name' : 'first_name',
+			'Last Name' : 'last_name',
+			'Email' : 'email'
+		}
+	}
+
 	get schema() {
 		return {
 			account_id: {
@@ -55,6 +64,8 @@ class Users extends AmpedModel {
 				user_editable: false
 			},
 			display_name: sequelize.STRING,
+			first_name: sequelize.STRING,
+			last_name: sequelize.STRING,
 			token: {
 				type: sequelize.STRING,
 				user_editable: false
