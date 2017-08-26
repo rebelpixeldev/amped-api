@@ -6,6 +6,13 @@ By default Google, Facebook and local localregister strategies are implemented.
 
 This project is automatically included in the [Amped API Boilerplates's](https://github.com/rebelpixeldev/amped-api.git) `package.json` file
 
+
+**A demo can be found at: [http://demo.rebelpixel.ca/](http://demo.rebelpixel.ca/)**
+
+**Username:** demo@demo.com
+
+**Password:** 123
+
 ### How it works
 
 The main file that you'll need to be framiliar with when extending the framework is [AmpedModel](https://github.com/rebelpixeldev/amped-api/blob/master/models/AmpedModel.js). There is full documentation in there with everything you can override and customize within the file
